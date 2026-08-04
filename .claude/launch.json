@@ -4,7 +4,7 @@
     {
       "name": "mrp-app",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "app"],
+      "runtimeArgs": ["run", "dev", "--prefix", "app/MRPESTAY"],
       "port": 3000
     }
   ]
