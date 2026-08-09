@@ -74,7 +74,7 @@ export default async function DashboardPage() {
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{po.po_number}</div>
                 <div style={{ color: "var(--color-neutral-600)", fontSize: 12, marginTop: 2 }}>{po.customer}</div>
-                <div style={{ color: "var(--color-neutral-500)", fontSize: 11, marginTop: 8 }}>Target ship: {po.targetShipDisplay}</div>
+                <div style={{ color: "var(--color-neutral-500)", fontSize: 11, marginTop: 8 }}>{po.shipDateLabel}: {po.shipDateDisplay}</div>
               </div>
               <div style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, border: `1px solid ${po.badgeBorder}`, background: po.badgeBg, color: po.badgeColor, whiteSpace: "nowrap", flexShrink: 0 }}>
                 {po.statusLabel}

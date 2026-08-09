@@ -260,12 +260,22 @@ export function buildPo(raw: RawPo) {
     },
   ];
 
+  const qcLine = lines.find((l) => l.line === "qc");
+  const shipDateLabel = raw.target_ship_date ? "Target ship" : "QC";
+  const shipDateDisplay = raw.target_ship_date
+    ? fmt(raw.target_ship_date)
+    : qcLine?.actual_date
+      ? qcLine.actualDisplay
+      : qcLine?.targetDisplay ?? "—";
+
   return {
     ...raw,
     ...badge,
     planDateDisplay: fmt(raw.plan_date),
     targetShipDisplay: fmt(raw.target_ship_date),
     actualShipDisplay: shipped ? fmt(raw.actual_ship_date) : "Not shipped",
+    shipDateLabel,
+    shipDateDisplay,
     lines,
     materials,
     revisions,

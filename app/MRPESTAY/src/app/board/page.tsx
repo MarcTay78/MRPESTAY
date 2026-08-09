@@ -209,7 +209,7 @@ function SortHeader({
 
 export default async function BoardPage({ searchParams }: { searchParams: Promise<{ sort?: string; dir?: string }> }) {
   const { sort: sortParam, dir: dirParam } = await searchParams;
-  const sort: SortKey = sortParam === "qc" || sortParam === "ship" ? sortParam : "po";
+  const sort: SortKey = sortParam === "po" || sortParam === "ship" ? sortParam : "qc";
   const dir: SortDir = dirParam === "desc" ? "desc" : "asc";
   const { supabase, role } = await requireSession();
   const raw = await fetchPos(supabase);

@@ -1,42 +1,42 @@
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap');
 
 :root {
-  --color-bg: #f3f2f2;
-  --color-surface: #eae9e9;
-  --color-text: #201e1d;
-  --color-accent: #ec3013;
-  --color-accent-2: #e15b47;
-  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+  --color-bg: #eef1f7;
+  --color-surface: #ffffff;
+  --color-text: #1c2b4a;
+  --color-accent: #1c2b4a;
+  --color-accent-2: #f5a623;
+  --color-divider: color-mix(in srgb, #1c2b4a 15%, transparent);
 
-  --color-neutral-100: #f8f4f4;
-  --color-neutral-200: #eae7e7;
-  --color-neutral-300: #d7d3d3;
-  --color-neutral-400: #bab6b6;
-  --color-neutral-500: #9b9797;
-  --color-neutral-600: #7d7979;
-  --color-neutral-700: #605d5d;
-  --color-neutral-800: #444141;
-  --color-neutral-900: #2d2b2b;
+  --color-neutral-100: #f7f8fb;
+  --color-neutral-200: #edeff4;
+  --color-neutral-300: #dde1ea;
+  --color-neutral-400: #c3c9d6;
+  --color-neutral-500: #a7aec0;
+  --color-neutral-600: #8a91a6;
+  --color-neutral-700: #6d7488;
+  --color-neutral-800: #4c5268;
+  --color-neutral-900: #2c3149;
 
-  --color-accent-100: #fff2ef;
-  --color-accent-200: #ffe0d9;
-  --color-accent-300: #ffc4b8;
-  --color-accent-400: #ff9783;
-  --color-accent-500: #ff563c;
-  --color-accent-600: #dd2b0f;
-  --color-accent-700: #ae1800;
-  --color-accent-800: #7c1405;
-  --color-accent-900: #4d170e;
+  --color-accent-100: #eef1f8;
+  --color-accent-200: #cfd6e8;
+  --color-accent-300: #a3aed0;
+  --color-accent-400: #6f7fac;
+  --color-accent-500: #445888;
+  --color-accent-600: #263a60;
+  --color-accent-700: #1c2b4a;
+  --color-accent-800: #14203a;
+  --color-accent-900: #0c1526;
 
-  --color-accent-2-100: #fff2ef;
-  --color-accent-2-200: #ffe0da;
-  --color-accent-2-300: #ffc4b9;
-  --color-accent-2-400: #ff9784;
-  --color-accent-2-500: #ef6853;
-  --color-accent-2-600: #c94b39;
-  --color-accent-2-700: #9e3526;
-  --color-accent-2-800: #71261b;
-  --color-accent-2-900: #471d16;
+  --color-accent-2-100: #fff8ec;
+  --color-accent-2-200: #ffe9c2;
+  --color-accent-2-300: #ffd68a;
+  --color-accent-2-400: #fabb4c;
+  --color-accent-2-500: #f5a623;
+  --color-accent-2-600: #d98a0f;
+  --color-accent-2-700: #ad6c0a;
+  --color-accent-2-800: #7c4d08;
+  --color-accent-2-900: #4a2d05;
 
   --font-heading: "Archivo", system-ui, sans-serif;
   --font-heading-weight: 800;
@@ -49,17 +49,17 @@
   --space-6: 24.0px;
   --space-8: 32.0px;
 
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #0c1526 8%, transparent);
+  --shadow-md: 0 4px 14px color-mix(in srgb, #0c1526 10%, transparent);
+  --shadow-lg: 0 14px 34px color-mix(in srgb, #0c1526 16%, transparent);
 
-  --mrp-green: oklch(42% 0.12 152);
-  --mrp-red: oklch(48% 0.16 21);
-  --mrp-yellow: oklch(65% 0.15 85);
+  --mrp-green: oklch(58% 0.15 152);
+  --mrp-red: oklch(55% 0.19 27);
+  --mrp-yellow: oklch(75% 0.16 85);
 }
 
 * , *::before, *::after { box-sizing: border-box; }
