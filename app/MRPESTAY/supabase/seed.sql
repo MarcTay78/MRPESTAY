@@ -11,35 +11,35 @@ insert into pos (po_number, customer, target_ship_date, actual_ship_date) values
   ('PO-2185', 'Casa Verde Imports',   '2026-07-01', '2026-06-28'),
   ('PO-2210', 'Solstice Home',        '2026-08-20', null);
 
-insert into po_items (po_id, type, model, qty, white_target, white_actual, seat_target, seat_actual)
-select p.id, v.type::item_type, v.model, v.qty, v.wt::date, v.wa::date, v.st::date, v.sa::date
+insert into po_items (po_id, type, model, qty, white_target, white_actual)
+select p.id, v.type::item_type, v.model, v.qty, v.wt::date, v.wa::date
 from (values
-  ('PO-2201','table','Oak Round 6-Seat',25,'2026-07-05','2026-07-04',null,null),
-  ('PO-2201','table','Walnut Extension',15,'2026-07-08','2026-07-09',null,null),
-  ('PO-2201','chair','Windsor Side Chair',100,'2026-07-02','2026-07-01','2026-07-01','2026-06-30'),
-  ('PO-2201','chair','Ladderback Chair',60,'2026-07-06','2026-07-05','2026-07-05','2026-07-04'),
+  ('PO-2201','table','Oak Round 6-Seat',25,'2026-07-05','2026-07-04'),
+  ('PO-2201','table','Walnut Extension',15,'2026-07-08','2026-07-09'),
+  ('PO-2201','chair','Windsor Side Chair',100,'2026-07-02','2026-07-01'),
+  ('PO-2201','chair','Ladderback Chair',60,'2026-07-06','2026-07-05'),
 
-  ('PO-2198','table','Oak Round 6-Seat',40,'2026-06-28','2026-07-05',null,null),
-  ('PO-2198','table','Farmhouse Rectangular',20,'2026-07-02','2026-07-10',null,null),
-  ('PO-2198','chair','Windsor Side Chair',160,'2026-06-20','2026-06-25','2026-06-22','2026-06-28'),
-  ('PO-2198','chair','Bench Seat',80,'2026-06-28','2026-07-02','2026-06-30','2026-07-05'),
+  ('PO-2198','table','Oak Round 6-Seat',40,'2026-06-28','2026-07-05'),
+  ('PO-2198','table','Farmhouse Rectangular',20,'2026-07-02','2026-07-10'),
+  ('PO-2198','chair','Windsor Side Chair',160,'2026-06-20','2026-06-25'),
+  ('PO-2198','chair','Bench Seat',80,'2026-06-28','2026-07-02'),
 
-  ('PO-2205','table','Walnut Extension',30,'2026-07-10','2026-07-10',null,null),
-  ('PO-2205','chair','Ladderback Chair',120,'2026-07-10','2026-07-11','2026-07-12','2026-07-12'),
+  ('PO-2205','table','Walnut Extension',30,'2026-07-10','2026-07-10'),
+  ('PO-2205','chair','Ladderback Chair',120,'2026-07-10','2026-07-11'),
 
-  ('PO-2190','table','Oak Round 6-Seat',35,'2026-06-05','2026-06-06',null,null),
-  ('PO-2190','table','Farmhouse Rectangular',15,'2026-06-10','2026-06-12',null,null),
-  ('PO-2190','chair','Windsor Side Chair',140,'2026-06-05','2026-06-07','2026-06-08','2026-06-10'),
-  ('PO-2190','chair','Bench Seat',60,'2026-06-10','2026-06-11','2026-06-12','2026-06-14'),
+  ('PO-2190','table','Oak Round 6-Seat',35,'2026-06-05','2026-06-06'),
+  ('PO-2190','table','Farmhouse Rectangular',15,'2026-06-10','2026-06-12'),
+  ('PO-2190','chair','Windsor Side Chair',140,'2026-06-05','2026-06-07'),
+  ('PO-2190','chair','Bench Seat',60,'2026-06-10','2026-06-11'),
 
-  ('PO-2185','table','Walnut Extension',25,'2026-05-20','2026-05-19',null,null),
-  ('PO-2185','chair','Ladderback Chair',100,'2026-05-20','2026-05-19','2026-05-22','2026-05-21'),
+  ('PO-2185','table','Walnut Extension',25,'2026-05-20','2026-05-19'),
+  ('PO-2185','chair','Ladderback Chair',100,'2026-05-20','2026-05-19'),
 
-  ('PO-2210','table','Oak Round 6-Seat',20,'2026-08-01','2026-07-31',null,null),
-  ('PO-2210','table','Farmhouse Rectangular',15,'2026-08-04',null,null,null),
-  ('PO-2210','chair','Windsor Side Chair',90,'2026-08-01','2026-07-30','2026-08-03','2026-08-02'),
-  ('PO-2210','chair','Bench Seat',50,'2026-08-04',null,'2026-08-06',null)
-) as v(po_number, type, model, qty, wt, wa, st, sa)
+  ('PO-2210','table','Oak Round 6-Seat',20,'2026-08-01','2026-07-31'),
+  ('PO-2210','table','Farmhouse Rectangular',15,'2026-08-04',null),
+  ('PO-2210','chair','Windsor Side Chair',90,'2026-08-01','2026-07-30'),
+  ('PO-2210','chair','Bench Seat',50,'2026-08-04',null)
+) as v(po_number, type, model, qty, wt, wa)
 join pos p on p.po_number = v.po_number;
 
 update table_rm t set target_date = v.target::date, actual_date = v.actual::date

@@ -5,7 +5,7 @@ import { fetchPos } from "@/lib/data";
 import { buildPo, type BuiltPo } from "@/lib/mrp";
 import NavBar from "@/components/NavBar";
 
-const COLUMN_HEADERS = ["Table WP", "Chair WP", "Chair Seat", "Finishing", "Packing"];
+const COLUMN_HEADERS = ["Table WP", "Chair WP", "Finishing", "Packing"];
 
 // green check = actual date entered, yellow clock = only a plan/target date set, red X = no date at all.
 // Color + glyph both encode status so it reads at a glance, including for color-blind users.
@@ -22,23 +22,6 @@ function StatusDot({ hasActual, hasTarget }: { hasActual: boolean; hasTarget: bo
         <path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="white" strokeWidth="2.75" strokeLinecap="round" />
       )}
     </svg>
-  );
-}
-
-function ListCell({ items }: { items: { model: string; target: string; actual: string; hasActual: boolean }[] }) {
-  return (
-    <div style={{ padding: "10px 10px" }}>
-      {items.map((mi, i) => (
-        <div key={i} style={{ marginBottom: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 15.72, fontWeight: 600 }}>
-            <StatusDot hasActual={mi.hasActual} hasTarget={mi.target !== "—"} />{mi.model}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 15, color: mi.hasActual ? "var(--color-accent-700)" : "var(--color-neutral-700)" }}>
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /></svg>{mi.hasActual ? mi.actual : mi.target}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -170,9 +153,6 @@ function BoardRow({ po, idx }: { po: BuiltPo; idx: number }) {
         <WpRmCell items={po.chairItems.map((i) => ({ id: i.id, model: i.model, target: i.whiteTargetDisplay, actual: i.whiteActualDisplay, hasActual: i.hasWhiteActual, rm: i.rm }))} />
       </div>
       <div style={{ background: rowBg, borderBottom: "1px solid var(--color-neutral-200)" }}>
-        <ListCell items={po.chairItems.map((i) => ({ model: i.model, target: i.seatTargetDisplay, actual: i.seatActualDisplay, hasActual: i.hasSeatActual }))} />
-      </div>
-      <div style={{ background: rowBg, borderBottom: "1px solid var(--color-neutral-200)" }}>
         <SingleCell target={finishing.targetDisplay} actual={finishing.actualDisplay} hasActual={!!finishing.actual_date} />
       </div>
       <div style={{ background: rowBg, borderBottom: "1px solid var(--color-neutral-200)" }}>
@@ -187,6 +167,13 @@ function BoardRow({ po, idx }: { po: BuiltPo; idx: number }) {
 
 type SortKey = "po" | "qc" | "ship";
 type SortDir = "asc" | "desc";
+type Tab = "all" | "green" | "open";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "green", label: "Ready" },
+  { key: "open", label: "On-Going" },
+];
 
 function sortKeyValue(po: BuiltPo, sort: SortKey): string {
   if (sort === "po") return po.po_number;
@@ -195,22 +182,23 @@ function sortKeyValue(po: BuiltPo, sort: SortKey): string {
 }
 
 function SortHeader({
-  label, sortKey, active, dir, style,
-}: { label: string; sortKey: SortKey; active: SortKey; dir: SortDir; style: CSSProperties }) {
+  label, sortKey, active, dir, tab, style,
+}: { label: string; sortKey: SortKey; active: SortKey; dir: SortDir; tab: Tab; style: CSSProperties }) {
   const isActive = sortKey === active;
   const nextDir: SortDir = isActive && dir === "asc" ? "desc" : "asc";
   return (
-    <Link href={`/board?sort=${sortKey}&dir=${nextDir}`} style={{ ...style, color: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
+    <Link href={`/board?tab=${tab}&sort=${sortKey}&dir=${nextDir}`} style={{ ...style, color: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
       {label}
       {isActive && <span aria-hidden>{dir === "asc" ? "↑" : "↓"}</span>}
     </Link>
   );
 }
 
-export default async function BoardPage({ searchParams }: { searchParams: Promise<{ sort?: string; dir?: string }> }) {
-  const { sort: sortParam, dir: dirParam } = await searchParams;
+export default async function BoardPage({ searchParams }: { searchParams: Promise<{ sort?: string; dir?: string; tab?: string }> }) {
+  const { sort: sortParam, dir: dirParam, tab: tabParam } = await searchParams;
   const sort: SortKey = sortParam === "po" || sortParam === "ship" ? sortParam : "qc";
   const dir: SortDir = dirParam === "desc" ? "desc" : "asc";
+  const tab: Tab = tabParam === "green" || tabParam === "open" ? tabParam : "all";
   const { supabase, role } = await requireSession();
   const raw = await fetchPos(supabase);
   const plannedPos = raw
@@ -218,20 +206,49 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     .filter((p) => !p.actual_ship_date)
     .sort((a, b) => sortKeyValue(a, sort).localeCompare(sortKeyValue(b, sort)) * (dir === "desc" ? -1 : 1));
 
+  const counts = {
+    all: plannedPos.length,
+    green: plannedPos.filter((p) => p.allGreen).length,
+    open: plannedPos.filter((p) => !p.allGreen).length,
+  };
+  const visiblePos = tab === "all" ? plannedPos : plannedPos.filter((p) => (tab === "green" ? p.allGreen : !p.allGreen));
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <NavBar role={role} />
-      <div style={{ maxWidth: 1600, margin: "0 auto", padding: "32px 28px 60px", width: "100%" }}>
-        <div style={{ marginBottom: 22 }}>
+      <div style={{ padding: "32px 28px 60px", width: "100%" }}>
+        <div style={{ marginBottom: 22, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
           <div style={{ fontFamily: "var(--font-heading)", fontSize: 31.2, fontWeight: 500 }}>Production Board</div>
+          <div className="seg">
+            {TABS.map((t) => {
+              const isActive = t.key === tab;
+              return (
+                <Link
+                  key={t.key}
+                  href={`/board?tab=${t.key}&sort=${sort}&dir=${dir}`}
+                  className="seg-opt"
+                  style={{
+                    color: isActive ? "var(--color-bg)" : "var(--color-text)",
+                    background: isActive ? "var(--color-accent)" : "transparent",
+                    fontWeight: isActive ? 600 : 400,
+                  }}
+                >
+                  {t.label} <span style={{ opacity: 0.7 }}>({counts[t.key]})</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
         <div style={{ overflow: "auto", maxHeight: "calc(100vh - 170px)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "220px repeat(3,190px) repeat(2,130px) 150px", minWidth: "fit-content" }}>
+          {/* Old pixel widths are now the minmax minimums: columns stretch to
+              fill a wide screen, and still overflow-scroll on a narrow one. */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,1.5fr) repeat(2,minmax(190px,1.6fr)) repeat(2,minmax(130px,1fr)) minmax(150px,1.1fr)" }}>
             <SortHeader
               label="PO / Customer"
               sortKey="po"
               active={sort}
               dir={dir}
+              tab={tab}
               style={{ padding: "8px 10px", fontSize: 16.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: "2px solid var(--color-text)", position: "sticky", top: 0, left: 0, zIndex: 3, background: "var(--color-bg)" }}
             />
             {COLUMN_HEADERS.map((label) => (
@@ -240,14 +257,19 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
               </div>
             ))}
             <div style={{ padding: "8px 10px", borderBottom: "2px solid var(--color-text)", display: "flex", gap: 6, position: "sticky", top: 0, zIndex: 2, background: "var(--color-bg)" }}>
-              <SortHeader label="QC" sortKey="qc" active={sort} dir={dir} style={{ fontSize: 16.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }} />
+              <SortHeader label="QC" sortKey="qc" active={sort} dir={dir} tab={tab} style={{ fontSize: 16.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }} />
               <span style={{ color: "var(--color-neutral-400)" }}>/</span>
-              <SortHeader label="Ship" sortKey="ship" active={sort} dir={dir} style={{ fontSize: 16.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }} />
+              <SortHeader label="Ship" sortKey="ship" active={sort} dir={dir} tab={tab} style={{ fontSize: 16.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em" }} />
             </div>
-            {plannedPos.map((po, idx) => (
+            {visiblePos.map((po, idx) => (
               <BoardRow key={po.id} po={po} idx={idx} />
             ))}
           </div>
+          {visiblePos.length === 0 && (
+            <div style={{ padding: "18px 10px", fontSize: 15.6, color: "var(--color-neutral-500)" }}>
+              No POs in this tab.
+            </div>
+          )}
         </div>
       </div>
     </div>

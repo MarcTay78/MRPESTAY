@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
+import { PO_STATUSES } from "@/lib/mrp";
 
 function touch(poId: string) {
   revalidatePath(`/po/${poId}`);
@@ -79,6 +80,58 @@ export async function deleteRmRow(formData: FormData) {
   touch(poId);
 }
 
+// PO can be created with no models; PPC adds them here afterwards so the
+// Table RM / Chair RM sections have something to hang rows off.
+export async function addPoItem(formData: FormData) {
+  const { supabase, role } = await requireSession();
+  if (role !== "ppc") return;
+  const type = String(formData.get("type"));
+  if (type !== "table" && type !== "chair") return;
+  const poId = String(formData.get("poId"));
+  const model = String(formData.get("model") || "").trim();
+  if (!model) return;
+  await supabase.from("po_items").insert({ po_id: poId, type, model, qty: Number(formData.get("qty")) || 0 });
+  touch(poId);
+}
+
+// Deleting a model also drops its table_rm/chair_rm rows (FK on delete cascade)
+// and its WP / Seat rows in Production Lines.
+export async function deletePoItem(formData: FormData) {
+  const { supabase, role } = await requireSession();
+  if (role !== "ppc") return;
+  const poId = String(formData.get("poId"));
+  const itemId = String(formData.get("itemId"));
+  await supabase.from("po_items").delete().eq("id", itemId).eq("po_id", poId);
+  touch(poId);
+}
+
+const LINES = ["finishing", "packing", "qc"] as const;
+
+function lineName(formData: FormData) {
+  const line = String(formData.get("line"));
+  return (LINES as readonly string[]).includes(line) ? line : null;
+}
+
+export async function deleteProductionLine(formData: FormData) {
+  const { supabase, role } = await requireSession();
+  if (role !== "ppc") return;
+  const line = lineName(formData);
+  if (!line) return;
+  const poId = String(formData.get("poId"));
+  await supabase.from("production_status").delete().eq("po_id", poId).eq("line", line);
+  touch(poId);
+}
+
+export async function addProductionLine(formData: FormData) {
+  const { supabase, role } = await requireSession();
+  if (role !== "ppc") return;
+  const line = lineName(formData);
+  if (!line) return;
+  const poId = String(formData.get("poId"));
+  await supabase.from("production_status").insert({ po_id: poId, line });
+  touch(poId);
+}
+
 export async function updateItemDate(formData: FormData) {
   const { supabase, role } = await requireSession();
   if (role !== "ppc") return;
@@ -121,6 +174,17 @@ export async function setActualShipDate(formData: FormData) {
   if (role !== "ppc") return;
   const poId = String(formData.get("poId"));
   await supabase.from("pos").update({ actual_ship_date: val(formData) }).eq("id", poId);
+  touch(poId);
+}
+
+export async function setPoStatus(formData: FormData) {
+  const { supabase, role } = await requireSession();
+  if (role !== "ppc") return;
+  const status = String(formData.get("status"));
+  if (!(PO_STATUSES as readonly string[]).includes(status)) return;
+  const poId = String(formData.get("poId"));
+  const { error } = await supabase.from("pos").update({ status }).eq("id", poId);
+  if (error) console.error("setPoStatus", error);
   touch(poId);
 }
 

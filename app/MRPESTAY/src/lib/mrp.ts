@@ -14,12 +14,40 @@ export const MATERIAL_LABELS: Record<string, string> = {
 
 export function fmt(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // slice keeps timestamptz callers (ship_date_revisions.changed_at) working —
+  // appending to a full timestamp string yields an Invalid Date.
+  const d = new Date(iso.slice(0, 10) + "T00:00:00");
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Which date the Planned card leads with: the target ship date when one is
+// set, otherwise wherever QC stands.
+export function shipDateFor(po: { target_ship_date: string | null; qc_target_date: string | null; qc_actual_date: string | null }) {
+  if (po.target_ship_date) return { shipDateLabel: "Target ship", shipDateDisplay: fmt(po.target_ship_date) };
+  return { shipDateLabel: "QC", shipDateDisplay: fmt(po.qc_actual_date ?? po.qc_target_date) };
+}
+
+export type PendingRm = { label: string; display: string; overdue: boolean };
+
+// "Material not yet in": Table RM / Chair RM rows PPC entered with no actual
+// date. Same component under two models is listed once, keeping the earliest
+// target date. Callers pass only the rows that are still outstanding.
+export function pendingRmFrom(rows: { label: string; target_date: string | null }[]): PendingRm[] {
+  const merged: { label: string; target_date: string | null }[] = [];
+  for (const row of rows) {
+    const seen = merged.find((m) => m.label === row.label);
+    if (!seen) merged.push({ ...row });
+    else if (row.target_date && (!seen.target_date || row.target_date < seen.target_date)) seen.target_date = row.target_date;
+  }
+  return merged.map((m) => ({
+    label: m.label,
+    display: fmt(m.target_date),
+    overdue: !!m.target_date && m.target_date < todayIso(),
+  }));
 }
 
 export interface RawItem {
@@ -31,8 +59,6 @@ export interface RawItem {
   parts_actual: string | null;
   white_target: string | null;
   white_actual: string | null;
-  seat_target: string | null;
-  seat_actual: string | null;
 }
 
 export interface RawComponent {
@@ -66,6 +92,7 @@ export interface RawPo {
   id: string;
   po_number: string;
   customer: string;
+  status: PoStatus;
   plan_date: string;
   target_ship_date: string | null;
   actual_ship_date: string | null;
@@ -84,53 +111,50 @@ export type ProdRow = {
   target: string | null;
   actual: string | null;
 } & (
-  | { kind: "item"; itemId: string; part: "white" | "seat" }
+  | { kind: "item"; itemId: string; part: "white" }
   | { kind: "line"; line: string }
   | { kind: "ship" }
 );
 
+// PPC sets the status by hand. Shipped stays derived: an actual ship date wins
+// over whatever the stored status says.
+export const PO_STATUSES = ["ready", "in_progress", "pending_material"] as const;
+export type PoStatus = (typeof PO_STATUSES)[number];
+
+export const STATUS_LABELS: Record<PoStatus, string> = {
+  ready: "Ready",
+  in_progress: "In Progress",
+  pending_material: "Pending Material",
+};
+
+const STATUS_TINT: Record<PoStatus, string> = {
+  ready: "var(--mrp-green)",
+  in_progress: "var(--mrp-yellow)",
+  pending_material: "var(--mrp-red)",
+};
+
 export interface Badge {
-  status: "green" | "red" | "grey";
   statusLabel: string;
   badgeBg: string;
   badgeBorder: string;
   badgeColor: string;
 }
 
-export function badgeFor(po: { target_ship_date: string | null; actual_ship_date: string | null }): Badge {
+export function badgeFor(po: { status: PoStatus; actual_ship_date: string | null }): Badge {
   if (po.actual_ship_date) {
     return {
-      status: "grey",
       statusLabel: "Shipped",
       badgeBg: "var(--color-neutral-200)",
       badgeBorder: "var(--color-neutral-300)",
       badgeColor: "var(--color-neutral-700)",
     };
   }
-  if (!po.target_ship_date) {
-    return {
-      status: "grey",
-      statusLabel: "No Ship Date",
-      badgeBg: "var(--color-neutral-200)",
-      badgeBorder: "var(--color-neutral-300)",
-      badgeColor: "var(--color-neutral-700)",
-    };
-  }
-  if (todayIso() > po.target_ship_date) {
-    return {
-      status: "red",
-      statusLabel: "Late",
-      badgeBg: "color-mix(in oklch, var(--mrp-red) 12%, white)",
-      badgeBorder: "color-mix(in oklch, var(--mrp-red) 40%, transparent)",
-      badgeColor: "var(--mrp-red)",
-    };
-  }
+  const tint = STATUS_TINT[po.status];
   return {
-    status: "green",
-    statusLabel: "On Track",
-    badgeBg: "color-mix(in oklch, var(--mrp-green) 12%, white)",
-    badgeBorder: "color-mix(in oklch, var(--mrp-green) 40%, transparent)",
-    badgeColor: "var(--mrp-green)",
+    statusLabel: STATUS_LABELS[po.status],
+    badgeBg: `color-mix(in oklch, ${tint} 12%, white)`,
+    badgeBorder: `color-mix(in oklch, ${tint} 40%, transparent)`,
+    badgeColor: tint,
   };
 }
 
@@ -174,12 +198,18 @@ function groupRm(rows: RawComponent[]): { byItem: Map<string, RmRow[]>; unassign
 export function buildPo(raw: RawPo) {
   const shipped = !!raw.actual_ship_date;
   const badge = badgeFor(raw);
+  // Ship-date risk is no longer the badge, but it's still worth flagging.
+  const isLate = !shipped && !!raw.target_ship_date && todayIso() > raw.target_ship_date;
 
+  // Every PO starts with all three lines (seed_po_children), but PPC can
+  // delete ones that don't apply. `exists` keeps the full shape for the board
+  // (fixed columns, shows "—") while the detail page renders only live rows.
   const lines = Object.keys(LINE_LABELS).map((key) => {
     const row = raw.lines.find((l) => l.line === key);
     return {
       line: key,
       label: LINE_LABELS[key],
+      exists: !!row,
       targetDisplay: fmt(row?.target_date),
       actualDisplay: fmt(row?.actual_date),
       target_date: row?.target_date ?? null,
@@ -214,9 +244,6 @@ export function buildPo(raw: RawPo) {
     hasWhiteActual: !!i.white_actual,
     whiteTargetDisplay: fmt(i.white_target),
     whiteActualDisplay: fmt(i.white_actual),
-    hasSeatActual: !!i.seat_actual,
-    seatTargetDisplay: fmt(i.seat_target),
-    seatActualDisplay: fmt(i.seat_actual),
     rm: rmByItem.get(i.id) ?? [],
   });
 
@@ -242,13 +269,7 @@ export function buildPo(raw: RawPo) {
       targetDisplay: i.whiteTargetDisplay, actualDisplay: i.whiteActualDisplay,
       target: i.white_target, actual: i.white_actual,
     })),
-    ...chairItems.map((i) => ({
-      kind: "item" as const, itemId: i.id, part: "seat" as const,
-      label: "Chair Seat — " + i.model,
-      targetDisplay: i.seatTargetDisplay, actualDisplay: i.seatActualDisplay,
-      target: i.seat_target, actual: i.seat_actual,
-    })),
-    ...lines.map((l) => ({
+    ...lines.filter((l) => l.exists).map((l) => ({
       kind: "line" as const, line: l.line,
       label: l.label, targetDisplay: l.targetDisplay, actualDisplay: l.actualDisplay,
       target: l.target_date, actual: l.actual_date,
@@ -260,24 +281,50 @@ export function buildPo(raw: RawPo) {
     },
   ];
 
+  // "All green" for the board's tabs: every model shipped-ready on the floor —
+  // each item has a white actual, each of its RM rows an actual, and every
+  // live line except QC is done. QC and the ship date are deliberately out.
+  // A PO with no models at all is never green; there's nothing to be done.
+  const allItems = [...tableItems, ...chairItems];
+  const allGreen =
+    allItems.length > 0 &&
+    allItems.every((i) => !!i.white_actual && i.rm.every((r) => r.hasActual)) &&
+    lines.filter((l) => l.exists && l.line !== "qc").every((l) => !!l.actual_date);
+
+  // "Material not yet in" for the dashboard: a Table RM / Chair RM row PPC
+  // entered that has no actual date yet. No row means nothing outstanding.
+  // The purchaser's material_status categories are a separate track and are
+  // not counted here. Same component under two models is listed once, keeping
+  // the earliest target date.
+  const pendingRm = pendingRmFrom(
+    [...allItems.flatMap((i) => i.rm), ...unassignedTableRM, ...unassignedChairRM]
+      .filter((r) => !r.hasActual)
+      .map((r) => ({ label: r.model, target_date: r.target_date })),
+  );
+
   const qcLine = lines.find((l) => l.line === "qc");
-  const shipDateLabel = raw.target_ship_date ? "Target ship" : "QC";
-  const shipDateDisplay = raw.target_ship_date
-    ? fmt(raw.target_ship_date)
-    : qcLine?.actual_date
-      ? qcLine.actualDisplay
-      : qcLine?.targetDisplay ?? "—";
+  const { shipDateLabel, shipDateDisplay } = shipDateFor({
+    target_ship_date: raw.target_ship_date,
+    qc_target_date: qcLine?.target_date ?? null,
+    qc_actual_date: qcLine?.actual_date ?? null,
+  });
 
   return {
     ...raw,
     ...badge,
+    isLate,
     planDateDisplay: fmt(raw.plan_date),
     targetShipDisplay: fmt(raw.target_ship_date),
     actualShipDisplay: shipped ? fmt(raw.actual_ship_date) : "Not shipped",
     shipDateLabel,
     shipDateDisplay,
+    // Dashboard "Planned" order: QC target first, ship date when QC is blank,
+    // and undated POs last. ISO dates sort correctly as plain strings.
+    qcSortDate: qcLine?.target_date ?? raw.target_ship_date ?? "9999-12-31",
     lines,
+    removedLines: lines.filter((l) => !l.exists),
     materials,
+    pendingRm,
     revisions,
     hasRevisions: revisions.length > 0,
     noRevisions: revisions.length === 0,
@@ -285,6 +332,7 @@ export function buildPo(raw: RawPo) {
     chairItems,
     totalTableQty,
     totalChairQty,
+    allGreen,
     prodRows,
     unassignedTableRM,
     unassignedChairRM,

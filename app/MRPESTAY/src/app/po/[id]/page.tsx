@@ -5,10 +5,15 @@ import { fetchPo } from "@/lib/data";
 import { buildPo, type ProdRow, type BuiltPo } from "@/lib/mrp";
 import NavBar from "@/components/NavBar";
 import DateField from "@/components/DateField";
+import StatusSelect from "@/components/StatusSelect";
 import {
   updateLineDate,
   updateComponentDate,
   addRmRow,
+  addPoItem,
+  deletePoItem,
+  deleteProductionLine,
+  addProductionLine,
   deleteRmRow,
   assignRmItem,
   updateItemDate,
@@ -16,6 +21,7 @@ import {
   reviseTargetShipDate,
   setActualShipDate,
   updatePlanDate,
+  setPoStatus,
 } from "@/app/po/actions";
 
 const LockIcon = () => (
@@ -23,6 +29,39 @@ const LockIcon = () => (
     <rect x="4" y="10" width="16" height="10" rx="1" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
   </svg>
 );
+
+function ItemColumn({
+  title, poId, type, items, isPpc,
+}: {
+  title: string;
+  poId: string;
+  type: "table" | "chair";
+  items: BuiltPo["tableItems"];
+  isPpc: boolean;
+}) {
+  return (
+    <div>
+      <div style={{ color: "var(--color-neutral-600)", fontSize: 14.3, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.03em" }}>{title}</div>
+      {items.map((item) => (
+        <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 16.9, padding: "6px 0", borderBottom: "1px solid var(--color-neutral-200)" }}>
+          <span>{item.model}</span><span style={{ color: "var(--color-neutral-700)" }}>{item.qty}</span>
+        </div>
+      ))}
+      {items.length === 0 && (
+        <div style={{ color: "var(--color-neutral-500)", fontSize: 15.6, padding: "6px 0" }}>None yet.</div>
+      )}
+      {isPpc && (
+        <form action={addPoItem} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input type="hidden" name="poId" value={poId} />
+          <input type="hidden" name="type" value={type} />
+          <input className="input" name="model" placeholder="Model name" style={{ flex: 1, minWidth: 0 }} />
+          <input className="input" type="number" name="qty" placeholder="Qty" style={{ width: 74 }} />
+          <button type="submit" className="btn btn-secondary" style={{ fontSize: 15.6 }}>+ Add</button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 function RmSection({
   title, poId, table, items, unassigned, isPpc,
@@ -91,7 +130,7 @@ function RmSection({
         </div>
       ))}
       {items.length === 0 && (
-        <div style={{ color: "var(--color-neutral-500)", fontSize: 15.6 }}>No models on this PO yet.</div>
+        <div style={{ color: "var(--color-neutral-500)", fontSize: 15.6 }}>No models on this PO yet — add one under Items above.</div>
       )}
       {isPpc && unassigned.length > 0 && (
         <div style={{ borderTop: "1px solid var(--color-neutral-300)", paddingTop: 12, marginTop: 4 }}>
@@ -113,6 +152,31 @@ function RmSection({
         </div>
       )}
     </div>
+  );
+}
+
+const XButton = ({ title }: { title: string }) => (
+  <button type="submit" className="btn btn-ghost" title={title} style={{ width: 22, height: 22, minHeight: 0, padding: 0, fontSize: 18.2, lineHeight: 1, color: "var(--mrp-red)" }}>×</button>
+);
+
+// Ship Date isn't deletable — it's a column on the PO itself, not a row.
+function ProdRowDelete({ row, poId }: { row: ProdRow; poId: string }) {
+  if (row.kind === "ship") return null;
+  if (row.kind === "item") {
+    return (
+      <form action={deletePoItem}>
+        <input type="hidden" name="poId" value={poId} />
+        <input type="hidden" name="itemId" value={row.itemId} />
+        <XButton title="Remove this model — also removes its RM rows and Items entry" />
+      </form>
+    );
+  }
+  return (
+    <form action={deleteProductionLine}>
+      <input type="hidden" name="poId" value={poId} />
+      <input type="hidden" name="line" value={row.line} />
+      <XButton title={`Remove ${row.label} from this PO`} />
+    </form>
   );
 }
 
@@ -168,9 +232,13 @@ export default async function PoDetailPage({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ fontFamily: "var(--font-heading)", fontSize: 36.4, fontWeight: 500 }}>{po.po_number}</div>
-              <div style={{ padding: "4px 10px", fontSize: 14.3, fontWeight: 600, border: `1px solid ${po.badgeBorder}`, background: po.badgeBg, color: po.badgeColor, whiteSpace: "nowrap" }}>
-                {po.statusLabel}
-              </div>
+              {isPpc && !po.actual_ship_date ? (
+                <StatusSelect action={setPoStatus} poId={po.id} value={po.status} color={po.badgeColor} background={po.badgeBg} border={po.badgeBorder} />
+              ) : (
+                <div style={{ padding: "4px 10px", fontSize: 14.3, fontWeight: 600, border: `1px solid ${po.badgeBorder}`, background: po.badgeBg, color: po.badgeColor, whiteSpace: "nowrap" }}>
+                  {po.statusLabel}
+                </div>
+              )}
             </div>
             <div style={{ color: "var(--color-neutral-600)", fontSize: 16.9, marginTop: 6 }}>
               {po.customer} · {po.totalTableQty} tables / {po.totalChairQty} chairs
@@ -183,22 +251,8 @@ export default async function PoDetailPage({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v9l9 5 9-5V8" /></svg>Items
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-            <div>
-              <div style={{ color: "var(--color-neutral-600)", fontSize: 14.3, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.03em" }}>Tables</div>
-              {po.tableItems.map((item) => (
-                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 16.9, padding: "6px 0", borderBottom: "1px solid var(--color-neutral-200)" }}>
-                  <span>{item.model}</span><span style={{ color: "var(--color-neutral-700)" }}>{item.qty}</span>
-                </div>
-              ))}
-            </div>
-            <div>
-              <div style={{ color: "var(--color-neutral-600)", fontSize: 14.3, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.03em" }}>Chairs</div>
-              {po.chairItems.map((item) => (
-                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 16.9, padding: "6px 0", borderBottom: "1px solid var(--color-neutral-200)" }}>
-                  <span>{item.model}</span><span style={{ color: "var(--color-neutral-700)" }}>{item.qty}</span>
-                </div>
-              ))}
-            </div>
+            <ItemColumn title="Tables" poId={po.id} type="table" items={po.tableItems} isPpc={isPpc} />
+            <ItemColumn title="Chairs" poId={po.id} type="chair" items={po.chairItems} isPpc={isPpc} />
           </div>
         </div>
 
@@ -262,7 +316,7 @@ export default async function PoDetailPage({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21V10l6 4v-4l6 4V7l6 4v10z" /><path d="M3 21h18" /></svg>Production Lines <span style={{ color: "var(--color-neutral-500)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— PPC entry</span>
           </div>
           <table className="table" style={{ width: "100%" }}>
-            <thead><tr><th>Line</th><th>Target Date</th><th>Actual Date</th></tr></thead>
+            <thead><tr><th>Line</th><th>Target Date</th><th>Actual Date</th>{isPpc && <th></th>}</tr></thead>
             <tbody>
               {po.prodRows.map((row, i) => {
                 const fields = prodRowFields(row, po.id);
@@ -283,11 +337,28 @@ export default async function PoDetailPage({
                         row.actualDisplay
                       )}
                     </td>
+                    {isPpc && (
+                      <td style={{ textAlign: "right" }}>
+                        <ProdRowDelete row={row} poId={po.id} />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          {isPpc && po.removedLines.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 14.3, color: "var(--color-neutral-600)", textTransform: "uppercase", letterSpacing: "0.03em" }}>Add row</span>
+              {po.removedLines.map((l) => (
+                <form key={l.line} action={addProductionLine}>
+                  <input type="hidden" name="poId" value={po.id} />
+                  <input type="hidden" name="line" value={l.line} />
+                  <button type="submit" className="btn btn-secondary" style={{ fontSize: 14.3 }}>+ {l.label}</button>
+                </form>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="card elev-sm" style={{ padding: "20px 22px" }}>
